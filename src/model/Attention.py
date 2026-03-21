@@ -159,7 +159,7 @@ class Attention(nn.Module):
         ):
             # Flash Attention：使用 PyTorch 优化的注意力实现
             # 条件：序列长度 > 1，没有 KV cache，没有复杂掩码
-            attn_output = F.scaled_dot_product_attention(
+            output = F.scaled_dot_product_attention(
                 xq,
                 xk,
                 xv,
@@ -206,3 +206,29 @@ class Attention(nn.Module):
         output = self.resid_dropout(self.out_proj(output))  # 输出投影和残差 dropout
 
         return output, past_kv
+
+
+if __name__ == "__main__":
+    # 简单测试 Attention 模块
+    from Pos_emb import precompute_freqs_cis
+
+    config = MiniMindConfig(
+        hidden_size=512,
+        num_attention_heads=8,
+        num_key_value_heads=2,  # GQA 配置
+        dropout=0.1,
+        flash_attn=False,
+    )
+    attention = Attention(config)
+
+    batch_size = 2
+    seq_len = 512
+    x = torch.randn(batch_size, seq_len, config.hidden_size)
+
+    cos, sin = precompute_freqs_cis(config.hidden_size // config.num_attention_heads)
+    cos, sin = cos[:seq_len], sin[:seq_len]  # 预计算位置编码
+
+    output, past_kv = attention(x, (cos, sin), use_cache=True)
+    print("Attention output shape:", output.shape)  # [batch, seq_len, hidden_size]
+    if past_kv is not None:
+        print("Cached KV shapes:", past_kv[0].shape, past_kv[1].shape)
